@@ -1,16 +1,18 @@
-# Security best practices in Amazon API Gateway
+# Security best practices in Amazon API Gateway: Throttling & Web Application Firewall
 
-Mystique Unicorn App is a containerized microservice made of many APIs. As Mystique Corp is dealing with Personally Identifiable Information(PII) data, they intend to secure their api. Ideally the APIs should be accessible from within their own corporate networks only and all other access to the APIs should be denied.
+Mystique Unicorn App is a containerized microservice made of many APIs. One of the API is open to the public and they encourage their users to build services on top of this API. Althought this API is public, they are looking to protect this API from abuse. For example, they do not want one user to aggressive poll the api and degrade the performance for other users. Another use case they would like to defend against is from bot like requests coming from the same source IPs.
 
-![Miztiik Asynchronous Messaging with AWS Lambda](images/miztiik_messaging.png)
+## 🎯Solutions
 
-We recommend that you add web ACLs and rate-based rules as part of your AWS Shield Advanced protections. These rules can alert you to sudden spikes in traffic that might indicate a potential DDoS event. A rate-based rule counts the requests that arrive from any individual address in any five minute period. If the number of requests exceeds the limit defined by you, the rule can trigger an action such as sending you a notification.
+AWS WAF is a web application firewall that helps to protect web applications and APIs from attacks. It enables you to configure a set of rules (called a web access control list (web ACL)) that allow, block, or count web requests based on customizable web security rules and conditions that you define.
 
-To prevent your API from being overwhelmed by too many requests, You can throttles requests to your API. You can set the limits for individual API stages or methods to improve overall performance across all APIs in your account. Set a limit on a steady-state rate and a burst of request submissions. When request submissions exceed the steady-state request rate and burst limits, API Gateway fails the limit-exceeding requests and returns `429 Too Many Requests` error responses to the client.
+Miztiik Corp can add web ACLs and rate-based rules to act on sudden spikes in traffic that might indicate a potential DDoS event. A rate-based rule counts the requests that arrive from any individual address in any five minute period. If the number of requests exceeds the limit(_say for example `133` requests per second_)defined by you, the rule can trigger an action such as sending you a notification.
+
+In addition to having security at the edge with WAF, Miztiik Corp can also throttles requests to the API at the API Gateway. You can set the limits for individual API `stages` or `methods`. When incoming request exceed the request rate and burst limits, API Gateway fails the limit-exceeding requests and returns `429 Too Many Requests` error responses to the client. This will ensure the service degradation and alleviates the _noisy neighbour_ problem.
 
 _Note:_ By default, API Gateway limits the steady-state request rate to `10000` requests per second (rps). It limits the burst (that is, the maximum bucket size) to `5000` requests across all APIs within an AWS account.
 
-![Miztiik Serverless API Authorization](images/miztiik_secure_private_api.png)
+![Security best practices in Amazon API Gateway: Throttling & Web Application Firewallm](images/miztiik_api_security_with_waf.png)
 
 In this article, we will build the above architecture. using Cloudformation generated using [AWS Cloud Development Kit (CDK)][102]. The architecture has been designed in a modular way so that we can build them individually and integrate them together. The prerequisites to build this architecture are listed below
 
@@ -30,8 +32,8 @@ In this article, we will build the above architecture. using Cloudformation gene
    - Get the application code
 
      ```bash
-     git clone https://github.com/miztiik/secure-private-api.git
-     cd secure-private-api
+     git clone https://github.com/miztiik/secure-api-with-throttling.git
+     cd secure-api-with-throttling
      ```
 
 1. ## 🚀 Prepare the dev environment to run AWS CDK
@@ -59,27 +61,28 @@ In this article, we will build the above architecture. using Cloudformation gene
    You should see an output of the available stacks,
 
    ```bash
-   unsecure-public-api
-   secure-private-api-vpc-stack
-   secure-private-api
-   api-consumer
+    unthrottled-api
+    secure-throttled-api
+    waf-stack
+    load-generator-vpc-stack
+    miztiik-artillery-load-generator
    ```
 
 1. ## 🚀 Deploying the application
 
    Let us walk through each of the stacks,
 
-   - **Stack: unsecure-public-api**
-     We are going to deploy a simple `greeter` api. This API is deployed as public endpoing to illustrate that any one in the internet can access the API and it is unsecure. When the api is invoked, It returns a welcome message along with the lambda ip address. We should be able to invoke the function from a browser or using an utility like `curl`.
+   - **Stack: unthrottled-api**
+     We are going to deploy a simple `greeter` api. This API is deployed as public endpoint without any throttling or WAF to protect it. When the api is invoked, It returns a simple welcome message along with a timestamp. We should be able to invoke the function from a browser or using an utility like `curl`.
 
      Initiate the deployment with the following command,
 
      ```bash
-     cdk deploy unsecure-public-api
+     cdk deploy unthrottled-api
      ```
 
      _Expected output:_
-     The `ApiUrl` can be found in the outputs section of the stack,
+     The `UnthrottledApiUrl` can be found in the outputs section of the stack,
 
      ```json
      {
@@ -87,11 +90,11 @@ In this article, we will build the above architecture. using Cloudformation gene
      }
      ```
 
-   - **Stack: secure-private-api**
+   - **Stack: secure-throttled-api**
 
      Now that we have understand that public APIs are accessible by everyone. Let us see how to build an secure API. To secure the API, we are going to deploy as `PRIVATE` type API and make it accessible only from a custom VPC. To add another layer of security, we can have a custom defined security group attached to the API.
 
-     This stack:_secure-private-api_ is dependant on the `secure-private-api-vpc-stack`. If you are using CDK, it will be deployed for you. If not go ahead and deploy that as well. The following resources are created by these two stacks,
+     This stack:_secure-throttled-api_ is dependant on the `secure-private-api-vpc-stack`. If you are using CDK, it will be deployed for you. If not go ahead and deploy that as well. The following resources are created by these two stacks,
 
      - A Custom VPC ( without NAT Instances )
        - API Gateway VPCE Endpoint
@@ -103,8 +106,7 @@ In this article, we will build the above architecture. using Cloudformation gene
         Initiate the deployment with the following command,
 
         ```bash
-        cdk deploy secure-private-api-vpc-stack
-        cdk deploy secure-private-api
+        cdk deploy secure-throttled-api
         ```
 
         Check the `Outputs` section of the stack to access the `SecureApiUrl`
