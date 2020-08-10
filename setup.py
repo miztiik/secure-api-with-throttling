@@ -9,7 +9,7 @@ setuptools.setup(
     name="secure_api_with_throttling",
     version="0.0.1",
 
-    description="An empty CDK Python app",
+    description="secure-api-with-throttling",
     long_description=long_description,
     long_description_content_type="text/markdown",
 
@@ -19,7 +19,7 @@ setuptools.setup(
     packages=setuptools.find_packages(where="secure_api_with_throttling"),
 
     install_requires=[
-        "aws-cdk.core==1.56.0",
+        "aws-cdk.core>=1.57.0",
     ],
 
     python_requires=">=3.6",

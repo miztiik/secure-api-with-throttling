@@ -1,0 +1,5 @@
+config:
+  target: https://boric39qt7.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter
+  phases:
+    - duration: 120
+      arrivalRate: 10
