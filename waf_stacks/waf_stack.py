@@ -25,7 +25,8 @@ class WafStack(core.Stack):
             id: str,
             stack_log_level: str,
             secure_api_stage_arn: str,
-            **kwargs
+            rps_limit: str,
+            ** kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -53,7 +54,7 @@ class WafStack(core.Stack):
             web_acl_name=web_acl.name,
             web_acl_id=web_acl.attr_id,
             web_acl_scope=web_acl.scope,
-            rps_limit="110"
+            rps_limit=rps_limit
         )
 
         # Export Value

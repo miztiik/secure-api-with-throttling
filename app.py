@@ -44,6 +44,7 @@ deploy_waf_stack = WafStack(
     "waf-stack",
     stack_log_level="INFO",
     secure_api_stage_arn=secure_api_with_throttling.secure_api_stage_arn,
+    rps_limit="133",
     description="Deploy WebAcl with WAF Stack"
 )
 

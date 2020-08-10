@@ -16,102 +16,121 @@ _Note:_ By default, API Gateway limits the steady-state request rate to `10000` 
 
 In this article, we will build the above architecture. using Cloudformation generated using [AWS Cloud Development Kit (CDK)][102]. The architecture has been designed in a modular way so that we can build them individually and integrate them together. The prerequisites to build this architecture are listed below
 
-1. ## 🧰 Prerequisites
+1.  ## 🧰 Prerequisites
 
-   This demo, instructions, scripts and cloudformation template is designed to be run in `us-east-1`. With few modifications you can try it out in other regions as well(_Not covered here_).
+    This demo, instructions, scripts and cloudformation template is designed to be run in `us-east-1`. With few modifications you can try it out in other regions as well(_Not covered here_).
 
-   - 🛠 AWS CLI Installed & Configured - [Get help here](https://youtu.be/TPyyfmQte0U)
-   - 🛠 AWS CDK Installed & Configured - [Get help here](https://www.youtube.com/watch?v=MKwxpszw0Rc)
-   - 🛠 Python Packages, _Change the below commands to suit your OS, the following is written for amzn linux 2_
-     - Python3 - `yum install -y python3`
-     - Python Pip - `yum install -y python-pip`
-     - Virtualenv - `pip3 install virtualenv`
+    - 🛠 AWS CLI Installed & Configured - [Get help here](https://youtu.be/TPyyfmQte0U)
+    - 🛠 AWS CDK Installed & Configured - [Get help here](https://www.youtube.com/watch?v=MKwxpszw0Rc)
+    - 🛠 Python Packages, _Change the below commands to suit your OS, the following is written for amzn linux 2_
+      - Python3 - `yum install -y python3`
+      - Python Pip - `yum install -y python-pip`
+      - Virtualenv - `pip3 install virtualenv`
 
-1. ## ⚙️ Setting up the environment
+1.  ## ⚙️ Setting up the environment
 
-   - Get the application code
+    - Get the application code
 
-     ```bash
-     git clone https://github.com/miztiik/secure-api-with-throttling.git
-     cd secure-api-with-throttling
-     ```
+      ```bash
+      git clone https://github.com/miztiik/secure-api-with-throttling.git
+      cd secure-api-with-throttling
+      ```
 
-1. ## 🚀 Prepare the dev environment to run AWS CDK
+1.  ## 🚀 Prepare the dev environment to run AWS CDK
 
-   We will cdk to be installed to make our deployments easier. Lets go ahead and install the necessary components.
+    We will cdk to be installed to make our deployments easier. Lets go ahead and install the necessary components.
 
-   ```bash
-   # If you DONT have cdk installed
-   npm install -g aws-cdk
+    ```bash
+    # If you DONT have cdk installed
+    npm install -g aws-cdk
 
-   # Make sure you in root directory
-   python3 -m venv .env
-   source .env/bin/activate
-   pip3 install -r requirements.txt
-   ```
+    # Make sure you in root directory
+    python3 -m venv .env
+    source .env/bin/activate
+    pip3 install -r requirements.txt
+    ```
 
-   The very first time you deploy an AWS CDK app into an environment _(account/region)_, you’ll need to install a `bootstrap stack`, Otherwise just go ahead and deploy using `cdk deploy`.
+    The very first time you deploy an AWS CDK app into an environment _(account/region)_, you’ll need to install a `bootstrap stack`, Otherwise just go ahead and deploy using `cdk deploy`.
 
-   ```bash
-   cdk bootstrap
-   cdk ls
-   # Follow on screen prompts
-   ```
+    ```bash
+    cdk bootstrap
+    cdk ls
+    # Follow on screen prompts
+    ```
 
-   You should see an output of the available stacks,
+    You should see an output of the available stacks,
 
-   ```bash
-    unthrottled-api
-    secure-throttled-api
-    waf-stack
-    load-generator-vpc-stack
-    miztiik-artillery-load-generator
-   ```
+    ```bash
+     unthrottled-api
+     secure-throttled-api
+     waf-stack
+     load-generator-vpc-stack
+     miztiik-artillery-load-generator
+    ```
 
-1. ## 🚀 Deploying the application
+1.  ## 🚀 Deploying the application
 
-   Let us walk through each of the stacks,
+    Let us walk through each of the stacks,
 
-   - **Stack: unthrottled-api**
-     We are going to deploy a simple `greeter` api. This API is deployed as public endpoint without any throttling or WAF to protect it. When the api is invoked, It returns a simple welcome message along with a timestamp. We should be able to invoke the function from a browser or using an utility like `curl`.
+    - **Stack: unthrottled-api**
+      We are going to deploy a simple `greeter` api running as a lambda function. This API is deployed as public endpoint without any throttling or WAF to protect it. The lambda function also does not have any reserved concurrency. This allows the lambda to consume the all the free unused concurrency limits. Although this might be a useful behaviour, in some cases like an DDoS attack, this behaviour is undesirable.
 
-     Initiate the deployment with the following command,
+      When the api is invoked, It returns a simple welcome message along with a timestamp. We should be able to invoke the function from a browser or using an utility like `curl`.
 
-     ```bash
-     cdk deploy unthrottled-api
-     ```
+      Initiate the deployment with the following command,
 
-     _Expected output:_
-     The `UnthrottledApiUrl` can be found in the outputs section of the stack,
+      ```bash
+      cdk deploy unthrottled-api
+      ```
 
-     ```json
-     {
-       "message": "Hi Miztikal World, Hello from Lambda running at 3.237.174.199"
-     }
-     ```
+      _Expected output:_
+      The `UnthrottledApiUrl` can be found in the outputs section of the stack,
 
-   - **Stack: secure-throttled-api**
+      ```json
+      {
+        "message": "Hello Miztiikal World, It is 2050-08-10 21:18:05.1891331 here! How about there?"
+      }
+      ```
 
-     Now that we have understand that public APIs are accessible by everyone. Let us see how to build an secure API. To secure the API, we are going to deploy as `PRIVATE` type API and make it accessible only from a custom VPC. To add another layer of security, we can have a custom defined security group attached to the API.
+      We will later use a load testing tool like `artillery` to generate a lot of requests against this url. If you end up overwhelming your API GW, it will respond back with `500` errors
 
-     This stack:_secure-throttled-api_ is dependant on the `secure-private-api-vpc-stack`. If you are using CDK, it will be deployed for you. If not go ahead and deploy that as well. The following resources are created by these two stacks,
+    - **Stack: secure-throttled-api**
 
-     - A Custom VPC ( without NAT Instances )
-       - API Gateway VPCE Endpoint
-       - Custom Security Group allowing port `443` from within the VPC
-     - Deploy an API Gateway with an lambda function backend
-       - Attach a API Gateway Resource Policy, to make the API accessible only from the VPC
+      This stack:_secure-throttled-api_ is very much similar to the previous stack. We will also add API throttling in this stack. We will start with a very very conservative limit of `throttling_rate_limit` of `10` and `throttling_burst_limit` of`100`.
 
+      Initiate the deployment with the following command,
 
-        Initiate the deployment with the following command,
+      ```bash
+      cdk deploy secure-throttled-api
+      ```
 
-        ```bash
-        cdk deploy secure-throttled-api
-        ```
+      Check the `Outputs` section of the stack to access the `SecureApiUrl`
 
-        Check the `Outputs` section of the stack to access the `SecureApiUrl`
+    - **Stack: secure-throttled-api**
+
+      This stack:_secure-throttled-api_ is very much similar to the previous stack. We will also add API throttling in this stack. We will start with a very very conservative limit of `throttling_rate_limit` of `10` and `throttling_burst_limit` of`100`.
+
+      Initiate the deployment with the following command,
+
+      ```bash
+      cdk deploy secure-throttled-api
+      ```
+
+      Check the `Outputs` section of the stack to access the `SecureApiUrl`
+
+    - **Stack: waf-stack**
+
+      To protect our secure api at the edge, we will deploy an Web Application Firewall. As of now, Cloudformation does not support creating rate based rules, so we will use a custom resource to do the same. I have built a very modest rate limit of `133`. If any IP address is sending more than `133` requests per 5 minute period, that IP will be blocked until it falls below the threshold in any 5 minute period.
+
+      Initiate the deployment with the following command,
+
+      ```bash
+      cdk deploy waf-stack
+      ```
 
 1.  ## 🔬 Testing the solution
+
+    We need a tool/utility to generate 100's or 1000's or requests simulating a real-world use case. We can use the community edition of the `artillery` for this purpose. We will build a VPC and host an EC2 instance that can run this tool. _Additional Activity, Do try this at home: Run artillery as a fargate task_
 
     The _Outputs_ section of the `secure-private-api` stack has the required information on the urls
 
@@ -120,53 +139,77 @@ In this article, we will build the above architecture. using Cloudformation gene
       Initiate the deployment with the following command,
 
       ```bash
-      cdk deploy api-consumer
+      cdk deploy load-generator-vpc-stack
+      cdk deploy miztiik-artillery-load-generator
       ```
 
-      ```bash
-      API_URL="https://pp3dmyx3gh.execute-api.us-east-1.amazonaws.com/miztiik/secure/greeter"
-      artillery quick -n 2000 --count 10  ${API_URL}
-      artillery quick -d 600 -n 2000 --count 10  ${API_URL}
-      ```
+    - Connect to the EC2 instance using Session Manager - [Get help here](https://www.youtube.com/watch?v=-ASMtZBrx-k)
 
-      Expected Output,
+      - Switch to bash shell `bash`
+      - Install `nodejs`
 
-      ```bash
-      sh-4.2$ curl -X GET https://p35nrnhb3m.execute-api.us-east-1.amazonaws.com/miztiik/secure/greeter
-      {"message": "Hi Miztiikal World, Hello from Lambda running at 3.235.133.156"}
-      ```
+        ```bash
+        # https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/setting-up-node-on-ec2-instance.html
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+        . ~/.nvm/nvm.sh
+        nvm install node
+        # Confirm Node is installed properly
+        node -e "console.log('Running Node.js ' + process.version)"
+        # Install artilleruy
+        npm install -g artillery
+        # Setup log file location to save artillery test results
+        sudo touch /var/log/miztiik-load-generator-unthrottled.log
+        sudo touch /var/log/miztiik-load-generator-throttled.log
+        sudo chown ssm-user:ssm-user /var/log/miztiik-load-generator-*
+        ```
 
-      Get the list of IP addresses blocked by rate-based rules
+    Now we are all almost set to bombard our APIs with requests. As the first step, let us set our API url as environment variables. Ensure you change the values from the appropriate stack
 
-      ```bash
-      aws wafv2 get-rate-based-statement-managed-keys --scope=REGIONAL --region=us-east-1 --web-acl-name=apiSentryAclwaf-stack --web-acl-id=b4d665ec-151a-44cd-a8ec-b147136faa52 --rule-name=rps_110
-      ```
+    ```bash
+    UNTHROTLLED_API_URL="https://s05negye01.execute-api.us-east-1.amazonaws.com/miztiik-unthrottled/unsecure/greeter"
+    SECURE_API_URL="https://x8btuv3d81.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter"
+    ```
 
-      ```bash
-      ]$ aws wafv2 get-rate-based-statement-managed-keys \
-          --scope REGIONAL \
-          --region us-east-1 \
-          --web-acl-name apiSentryAclwaf-stack \
-          --web-acl-id b4d665ec-151a-44cd-a8ec-b147136faa52 \
-          --rule-name rps_110
+    The below artillery request will generate about 1500 requests, simulating the arrival of 5 users per second and each generating one request. We have also informed artillery to add new users for about 5 minutes(_300 seconds_). In a real-world scenario, you might want to throw much bigger requests at your workloads. If you are testing and playaround with the services, this can be a good starting point.
 
-        {
-            "ManagedKeysIPV4": {
-                "IPAddressVersion": "IPV4",
-                "Addresses": [
-                    "3.236.176.254/32"
-                ]
-            },
-            "ManagedKeysIPV6": {
-                "IPAddressVersion": "IPV6",
-                "Addresses": []
-            }
-        }
-      ```
+    ```bash
+    artillery quick -d 300 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
+    artillery quick -d 350 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+    ```
 
-You should be able to see the public IP address of EC2 instances being blocked by WAF. This IP will be automatically unblocked by WAF if the requests fall below the threshold in any `5-Minute` period.
+    Expected Output,
 
-    _Additional Learnings:_ You can check the logs in cloudwatch for more information or increase the logging level of the lambda functions by changing the environment variable from `INFO` to `DEBUG`
+        Get the list of IP addresses blocked by rate-based rules
+
+        ```bash
+        aws wafv2 get-rate-based-statement-managed-keys --scope=REGIONAL --region=us-east-1 --web-acl-name=apiSentryAclwaf-stack --web-acl-id=b4d665ec-151a-44cd-a8ec-b147136faa52 --rule-name=rps_110
+        ```
+
+        ```bash
+        ]$ aws wafv2 get-rate-based-statement-managed-keys \
+            --scope REGIONAL \
+            --region us-east-1 \
+            --web-acl-name apiSentryAclwaf-stack \
+            --web-acl-id b4d665ec-151a-44cd-a8ec-b147136faa52 \
+            --rule-name rps_110
+
+          {
+              "ManagedKeysIPV4": {
+                  "IPAddressVersion": "IPV4",
+                  "Addresses": [
+                      "3.236.176.254/32"
+                  ]
+              },
+              "ManagedKeysIPV6": {
+                  "IPAddressVersion": "IPV6",
+                  "Addresses": []
+              }
+          }
+        ```
+
+        You should be able to see the public IP address of EC2 instances being blocked by WAF. This IP will be automatically unblocked by WAF if the requests fall below the threshold in any `5-Minute` period.
+
+        _Additional Learnings:_ You can check the logs in cloudwatch for more information or increase the logging level of the lambda functions by changing the environment variable from `INFO` to `DEBUG`
 
 1.  ## 🧹 CleanUp
 
