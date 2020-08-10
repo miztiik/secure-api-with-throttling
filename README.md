@@ -96,7 +96,10 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     - **Stack: secure-throttled-api**
 
-      This stack:_secure-throttled-api_ is very much similar to the previous stack. We will also add API throttling in this stack. We will start with a very very conservative limit of `throttling_rate_limit` of `10` and `throttling_burst_limit` of`100`.
+      This stack:_secure-throttled-api_ is very much similar to the previous stack. In addition to that, We will also add two configurations to limit the blast radius.
+
+      - API throttling in this stack. We will start with a very very conservative limit of `throttling_rate_limit` of `10` and `throttling_burst_limit` of`100`.
+      - The `greeter` lambda function will also have its `reserved_concurrent_executions` set to `100`. This will limit the lambda invocations to a maximum of `100` per second.
 
       Initiate the deployment with the following command,
 
@@ -166,52 +169,73 @@ In this article, we will build the above architecture. using Cloudformation gene
     Now we are all almost set to bombard our APIs with requests. As the first step, let us set our API url as environment variables. Ensure you change the values from the appropriate stack
 
     ```bash
-    UNTHROTLLED_API_URL="https://s05negye01.execute-api.us-east-1.amazonaws.com/miztiik-unthrottled/unsecure/greeter"
-    SECURE_API_URL="https://x8btuv3d81.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter"
+    UNTHROTLLED_API_URL="https://3t354sxysj.execute-api.us-east-1.amazonaws.com/miztiik-unthrottled/unsecure/greeter"
+    SECURE_API_URL="https://9r4ftbohse.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter"
     ```
 
     The below artillery request will generate about 1500 requests, simulating the arrival of 5 users per second and each generating one request. We have also informed artillery to add new users for about 5 minutes(_300 seconds_). In a real-world scenario, you might want to throw much bigger requests at your workloads. If you are testing and playaround with the services, this can be a good starting point.
 
     ```bash
-    artillery quick -d 300 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
-    artillery quick -d 350 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+     artillery quick -d 300 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
+     artillery quick -d 350 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
     ```
 
     Expected Output,
 
-        Get the list of IP addresses blocked by rate-based rules
+    ```bash
+    $ curl ${SECURE_API_URL}
+    {"message":"Forbidden"}
 
-        ```bash
-        aws wafv2 get-rate-based-statement-managed-keys --scope=REGIONAL --region=us-east-1 --web-acl-name=apiSentryAclwaf-stack --web-acl-id=b4d665ec-151a-44cd-a8ec-b147136faa52 --rule-name=rps_110
-        ```
+    # If you want to try verbose curl
+    $ curl -v ${SECURE_API_URL}
+    # truncated output
+    ...
+    < HTTP/2 403
+    < content-type: application/json
+    < content-length: 23
+    < x-amzn-requestid: b5b76376-29f1-4e9a-99e6-5e19ebe7bb82
+    < x-amzn-errortype: ForbiddenException
+    < x-cache: Error from cloudfront
+    < via: 1.1 5eb5e19c1a78889d10ff8f1551ed2aa.cloudfront.net (CloudFront)
+    < x-amz-cf-pop: IAD89-C1
+    < x-amz-cf-id: MngW-1YE6-LXbV6d5K21jOtSYTkVdVd_IUDMAvk4HWUaYLVtxeRQA==
+    ...
+    # truncated output
+    ```
 
-        ```bash
-        ]$ aws wafv2 get-rate-based-statement-managed-keys \
-            --scope REGIONAL \
-            --region us-east-1 \
-            --web-acl-name apiSentryAclwaf-stack \
-            --web-acl-id b4d665ec-151a-44cd-a8ec-b147136faa52 \
-            --rule-name rps_110
+    You can notice that after throwing more `133` requests at the WAF+API GW, You should be able to see the public IP address of EC2 instances being blocked by WAF. _Dont forget to update the \_web-acl-id_ of your waf
 
-          {
-              "ManagedKeysIPV4": {
-                  "IPAddressVersion": "IPV4",
-                  "Addresses": [
-                      "3.236.176.254/32"
-                  ]
-              },
-              "ManagedKeysIPV6": {
-                  "IPAddressVersion": "IPV6",
-                  "Addresses": []
-              }
+    ```bash
+    # Get the list of IP addresses blocked by rate-based rules
+    ]$ aws wafv2 get-rate-based-statement-managed-keys \
+        --scope REGIONAL \
+        --region us-east-1 \
+        --web-acl-name apiSentryAcl-waf-stack \
+        --web-acl-id b4d65ec-44cd-a8ec-b147136faa52 \
+        --rule-name imit_rps_to_110
+      {
+          "ManagedKeysIPV4": {
+              "IPAddressVersion": "IPV4",
+              "Addresses": [
+                  "3.236.176.254/32"
+              ]
+          },
+          "ManagedKeysIPV6": {
+              "IPAddressVersion": "IPV6",
+              "Addresses": []
           }
-        ```
+      }
+    ```
 
-        You should be able to see the public IP address of EC2 instances being blocked by WAF. This IP will be automatically unblocked by WAF if the requests fall below the threshold in any `5-Minute` period.
+    Here is a snapshot of the WAF dashboard showing the `allowed` and `blocked` requests. As the requests reached the threshold in a `5` minute period, all the remaning requests were blocked.
 
-        _Additional Learnings:_ You can check the logs in cloudwatch for more information or increase the logging level of the lambda functions by changing the environment variable from `INFO` to `DEBUG`
+    ![Security best practices in Amazon API Gateway: Throttling & Web Application Firewallm](images/miztiik_api_security_waf_00.png)
 
-1.  ## 🧹 CleanUp
+    Here we have shown how to use WAF to protect your APIs from http floods. This also has the effect of reduced cost, as there are no backend lambda invocations.
+
+    _Additional Learnings:_ You can check the logs in cloudwatch for more information or increase the logging level of the lambda functions by changing the environment variable from `INFO` to `DEBUG`
+
+1)  ## 🧹 CleanUp
 
     If you want to destroy all the resources created by the stack, Execute the below command to delete the stack, or _you can delete the stack from console as well_
 
@@ -221,7 +245,7 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     ```bash
     # Delete from cdk
-    cdk destroy cognito-identity-provider
+    cdk destroy
 
     # Follow any on-screen prompts
 
@@ -235,7 +259,7 @@ In this article, we will build the above architecture. using Cloudformation gene
 
 ## 📌 Who is using this
 
-This repository to teaches cloudformation to new developers, Solution Architects & Ops Engineers in AWS. Based on that knowledge these Udemy [course #1][103], [course #2][102] helps you build complete architecture in AWS.
+This repository to teaches how to secure your api with WAF & API GW Throttling to new developers, Solution Architects & Ops Engineers in AWS. Based on that knowledge these Udemy [course #1][103], [course #2][102] helps you build complete architecture in AWS.
 
 ### 💡 Help/Suggestions or 🐛 Bugs
 
@@ -286,7 +310,7 @@ https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-troubleshoot-
 [101]: https://www.udemy.com/course/aws-cloud-security-proactive-way/?referralCode=71DC542AD4481309A441
 [102]: https://www.udemy.com/course/aws-cloud-development-kit-from-beginner-to-professional/?referralCode=E15D7FB64E417C547579
 [103]: https://www.udemy.com/course/aws-cloudformation-basics?referralCode=93AD3B1530BC871093D6
-[200]: https://github.com/miztiik/secure-private-api/issues
+[200]: https://github.com/miztiik/secure-api-with-throttling/issues
 [899]: https://www.udemy.com/user/n-kumar/
 [900]: https://ko-fi.com/miztiik
 [901]: https://ko-fi.com/Q5Q41QDGK
