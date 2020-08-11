@@ -178,6 +178,10 @@ In this article, we will build the above architecture. using Cloudformation gene
     ```bash
      artillery quick -d 310 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
      artillery quick -d 310 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+
+     # Check the logs for summary
+     tail -20 /var/log/miztiik-load-generator-unthrottled.log
+     tail -20 /var/log/miztiik-load-generator-throttled.log
     ```
 
     Expected Output,
@@ -235,31 +239,31 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     I have done these tests for different durations[`3`, `6`, `12` seconds] for 100 users, each generating 51 requests. This comes to about `15300`, `30600`, and `61200` requests. Here are the results,
 
-| Artillery_Config_Summary | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api |
-| ------------------------ | --------------- | ------------- | --------------- | ------------- | --------------- | ------------- |
-| artillery_duration       | 3               | 3             | 6               | 6             | 12              | 12            |
-| artillery_arrival_rate   | 100             | 100           | 100             | 100           | 100             | 100           |
-| artillery_req_per_user   | 51              | 51            | 51              | 51            | 51              | 51            |
-|                          |                 |               |                 |               |                 |               |
-| Artillery Summary Report |                 |               |                 |               |                 |               |
-| Scenarios launched       | 300             | 300           | 600             | 600           | 1200            | 1200          |
-| Scenarios completed      | 300             | 300           | 600             | 600           | 1200            | 1200          |
-| Requests completed       | 15300           | 15300         | 30600           | 30600         | 61200           | 61200         |
-| Mean response/sec        | 75.35           | 258.36        | 139.84          | 347.65        | 168.88          | 301.27        |
-| Response time (msec)     |                 |               |                 |               |                 |               |
-| min                      | 14              | 3.4           | 13.4            | 4.1           | 14.9            | 3.8           |
-| max                      | 10418.6         | 10850.3       | 10425.6         | 10756.5       | 12208           | 10407.4       |
-| median                   | 75              | 111.9         | 69.9            | 123.6         | 432.3           | 137.5         |
-| p95                      | 9121.6          | 238.1         | 9064.4          | 261.7         | 9410.8          | 306.9         |
-| p99                      | 10036.8         | 168           | 10041           | 945.6         | 10306.2         | 926.8         |
-| Scenario counts          |                 |               |                 |               |                 |               |
-| 100%                     | 300             | 300           | 600             | 600           | 1200            | 1200          |
-| Codes                    |                 |               |                 |               |                 |               |
-| 200                      | 14576           | 575           | 29247           | 437           | 58424           | 758           |
-| 403                      |                 | 226           |                 | 21809         |                 | 49208         |
-| 429                      |                 | 14499         |                 | 8354          |                 | 11228         |
-| 500                      |                 |               |                 |               |                 | 6             |
-| 502                      | 724             |               | 1353            |               | 2776            |               |
+    | Artillery_Config_Summary | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api |
+    | ------------------------ | --------------- | ------------- | --------------- | ------------- | --------------- | ------------- |
+    | artillery_duration       | 3               | 3             | 6               | 6             | 12              | 12            |
+    | artillery_arrival_rate   | 100             | 100           | 100             | 100           | 100             | 100           |
+    | artillery_req_per_user   | 51              | 51            | 51              | 51            | 51              | 51            |
+    |                          |                 |               |                 |               |                 |               |
+    | Artillery Summary Report |                 |               |                 |               |                 |               |
+    | Scenarios launched       | 300             | 300           | 600             | 600           | 1200            | 1200          |
+    | Scenarios completed      | 300             | 300           | 600             | 600           | 1200            | 1200          |
+    | Requests completed       | 15300           | 15300         | 30600           | 30600         | 61200           | 61200         |
+    | Mean response/sec        | 75.35           | 258.36        | 139.84          | 347.65        | 168.88          | 301.27        |
+    | Response time (msec)     |                 |               |                 |               |                 |               |
+    | min                      | 14              | 3.4           | 13.4            | 4.1           | 14.9            | 3.8           |
+    | max                      | 10418.6         | 10850.3       | 10425.6         | 10756.5       | 12208           | 10407.4       |
+    | median                   | 75              | 111.9         | 69.9            | 123.6         | 432.3           | 137.5         |
+    | p95                      | 9121.6          | 238.1         | 9064.4          | 261.7         | 9410.8          | 306.9         |
+    | p99                      | 10036.8         | 168           | 10041           | 945.6         | 10306.2         | 926.8         |
+    | Scenario counts          |                 |               |                 |               |                 |               |
+    | 100%                     | 300             | 300           | 600             | 600           | 1200            | 1200          |
+    | Codes                    |                 |               |                 |               |                 |               |
+    | 200                      | 14576           | 575           | 29247           | 437           | 58424           | 758           |
+    | 403                      |                 | 226           |                 | 21809         |                 | 49208         |
+    | 429                      |                 | 14499         |                 | 8354          |                 | 11228         |
+    | 500                      |                 |               |                 |               |                 | 6             |
+    | 502                      | 724             |               | 1353            |               | 2776            |               |
 
     You can observe here that, With throttling & WAF, we were able to block a significant amount of spam traffic, maintain the `min` response times under increased load and also serve a _p95_ in about `300ms`
 
@@ -269,7 +273,7 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     If you want to destroy all the resources created by the stack, Execute the below command to delete the stack, or _you can delete the stack from console as well_
 
-    - Resources created during [deployment](#-resource-deployment-using-aws-cdk)
+    - Resources created during [Deploying The Application](#deploying-the-application)
     - Delete CloudWatch Lambda LogGroups
     - _Any other custom resources, you have created for this demo_
 
@@ -303,21 +307,13 @@ Thank you for your interest in contributing to our project. Whether it's a bug r
 
 1. [Throttle API requests for better throughput][1]
 
-1. [Troubleshoot API Gateway private API endpoint issues][2]
+1. [Rate Based WAFv2 Rules][2]
 
-1. [Security best practices in Amazon API Gateway][3]
+1. [Troubleshoot HTTP 403 Forbidden errors from API Gateway][3]
 
-1. [Controlling and managing access to a REST API in API Gateway][4]
+1. [Update WebAcl to WAFv2][4]
 
 1. [Protecting APIs using AWS WAF][5]
-
-1. [Access private REST API in another account using an interface VPC endpoint][6]
-
-1. [IAM policy examples for API execution permissions][7]
-
-1. [VPC endpoint policies for private APIs in API Gateway][8]
-
-1. [DNS with AWS Client VPN endpoint][10]
 
 ### 🏷️ Metadata
 
@@ -325,17 +321,11 @@ Thank you for your interest in contributing to our project. Whether it's a bug r
 
 ![miztiik-success-green](https://img.shields.io/badge/miztiik-success-green)
 
-https://docs.aws.amazon.com/waf/latest/APIReference/API_UpdateWebACL.html
-https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-troubleshoot-403-forbidden/
-
 [1]: https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html
-[2]: https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-private-endpoint-connection/
-[3]: https://docs.aws.amazon.com/apigateway/latest/developerguide/security-best-practices.html
-[4]: https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-control-access-to-api.html
+[2]: https://docs.aws.amazon.com/waf/latest/developerguide/waf-rule-statement-type-rate-based.html
+[3]: https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-troubleshoot-403-forbidden/
+[4]: https://docs.aws.amazon.com/waf/latest/APIReference/API_UpdateWebACL.html
 [5]: https://aws.amazon.com/blogs/compute/protecting-your-api-using-amazon-api-gateway-and-aws-waf-part-i/
-[6]: https://www.youtube.com/watch?v=UnoVqaTGwzM
-[7]: https://aws.amazon.com/blogs/compute/protecting-your-api-using-amazon-api-gateway-and-aws-waf-part-2/
-[8]: https://aws.amazon.com/blogs/compute/building-well-architected-serverless-applications-controlling-serverless-api-access-part-2/
 [100]: https://www.udemy.com/course/aws-cloud-security/?referralCode=B7F1B6C78B45ADAF77A9
 [101]: https://www.udemy.com/course/aws-cloud-security-proactive-way/?referralCode=71DC542AD4481309A441
 [102]: https://www.udemy.com/course/aws-cloud-development-kit-from-beginner-to-professional/?referralCode=E15D7FB64E417C547579
