@@ -135,16 +135,12 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     We need a tool/utility to generate 100's or 1000's or requests simulating a real-world use case. We can use the community edition of the `artillery` for this purpose. We will build a VPC and host an EC2 instance that can run this tool. _Additional Activity, Do try this at home: Run artillery as a fargate task_
 
-    The _Outputs_ section of the `secure-private-api` stack has the required information on the urls
+    Initiate the deployment with the following command,
 
-    - We need to invoke the `SecureApiUrl` from the same VPC. To make it easier to test the solution, I have created another template that will deploy an EC2 instance in the same VPC and in the same security group as the API Gateway. You can login to the instances using [Systems Manager](https://www.youtube.com/watch?v=-ASMtZBrx-k). You can deploy this stack or create your own instance.
-
-      Initiate the deployment with the following command,
-
-      ```bash
-      cdk deploy load-generator-vpc-stack
-      cdk deploy miztiik-artillery-load-generator
-      ```
+    ```bash
+    cdk deploy load-generator-vpc-stack
+    cdk deploy miztiik-artillery-load-generator
+    ```
 
     - Connect to the EC2 instance using Session Manager - [Get help here](https://www.youtube.com/watch?v=-ASMtZBrx-k)
 
@@ -166,23 +162,25 @@ In this article, we will build the above architecture. using Cloudformation gene
         sudo chown ssm-user:ssm-user /var/log/miztiik-load-generator-*
         ```
 
-    Now we are all almost set to bombard our APIs with requests. As the first step, let us set our API url as environment variables. Ensure you change the values from the appropriate stack
+    - The _Outputs_ section of the `unthrottled-api` and `secure-throttled-api` stack has the required information on the urls. Collect them
 
-    ```bash
-    UNTHROTLLED_API_URL="https://3t354sxysj.execute-api.us-east-1.amazonaws.com/miztiik-unthrottled/unsecure/greeter"
-    SECURE_API_URL="https://9r4ftbohse.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter"
-    ```
+      Now we are all almost set to bombard our APIs with requests. As the first step, let us set our API url as environment variables. Ensure you change the values from the appropriate stack
 
-    The below artillery request will generate about 1500 requests, simulating the arrival of 5 users per second and each generating one request. We have also informed artillery to add new users for about 5 minutes(_300 seconds_). In a real-world scenario, you might want to throw much bigger requests at your workloads. If you are testing and playaround with the services, this can be a good starting point.
+      ```bash
+      UNTHROTLLED_API_URL="https://3t354sxysj.execute-api.us-east-1.amazonaws.com/miztiik-unthrottled/unsecure/greeter"
+      SECURE_API_URL="https://9r4ftbohse.execute-api.us-east-1.amazonaws.com/miztiik-throttled/secure/greeter"
+      ```
 
-    ```bash
-     artillery quick -d 310 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
-     artillery quick -d 310 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+      The below artillery request will generate about 1500 requests, simulating the arrival of 5 users per second and each generating one request. We have also informed artillery to add new users for about 5 minutes(_300 seconds_). In a real-world scenario, you might want to throw much bigger requests at your workloads. If you are testing and playaround with the services, this can be a good starting point.
 
-     # Check the logs for summary
-     tail -20 /var/log/miztiik-load-generator-unthrottled.log
-     tail -20 /var/log/miztiik-load-generator-throttled.log
-    ```
+      ```bash
+      artillery quick -d 310 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
+      artillery quick -d 310 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+
+      # Check the logs for summary
+      tail -20 /var/log/miztiik-load-generator-unthrottled.log
+      tail -20 /var/log/miztiik-load-generator-throttled.log
+      ```
 
     Expected Output,
 
