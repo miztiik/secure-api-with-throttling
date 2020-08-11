@@ -176,8 +176,8 @@ In this article, we will build the above architecture. using Cloudformation gene
     The below artillery request will generate about 1500 requests, simulating the arrival of 5 users per second and each generating one request. We have also informed artillery to add new users for about 5 minutes(_300 seconds_). In a real-world scenario, you might want to throw much bigger requests at your workloads. If you are testing and playaround with the services, this can be a good starting point.
 
     ```bash
-     artillery quick -d 300 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
-     artillery quick -d 350 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
+     artillery quick -d 310 -r 5 -n 1 ${UNTHROTLLED_API_URL} >> /var/log/miztiik-load-generator-unthrottled.log &
+     artillery quick -d 310 -r 5 -n 1 ${SECURE_API_URL} >> /var/log/miztiik-load-generator-throttled.log &
     ```
 
     Expected Output,
@@ -231,11 +231,41 @@ In this article, we will build the above architecture. using Cloudformation gene
 
     ![Security best practices in Amazon API Gateway: Throttling & Web Application Firewallm](images/miztiik_api_security_waf_00.png)
 
-    Here we have shown how to use WAF to protect your APIs from http floods. This also has the effect of reduced cost, as there are no backend lambda invocations.
+    Here we have shown how to use WAF to protect your APIs from http floods. This also has the effect of reduced cost, as there are no backend lambda invocations. Even if you dont have a WAF, the API throttling will kick-in and result in HTTP `429` errors
+
+    I have done these tests for different durations[`3`, `6`, `12` seconds] for 100 users, each generating 51 requests. This comes to about `15300`, `30600`, and `61200` requests. Here are the results,
+
+| Artillery_Config_Summary | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api | Unthrottled_Api | Throttled_Api |
+| ------------------------ | --------------- | ------------- | --------------- | ------------- | --------------- | ------------- |
+| artillery_duration       | 3               | 3             | 6               | 6             | 12              | 12            |
+| artillery_arrival_rate   | 100             | 100           | 100             | 100           | 100             | 100           |
+| artillery_req_per_user   | 51              | 51            | 51              | 51            | 51              | 51            |
+|                          |                 |               |                 |               |                 |               |
+| Artillery Summary Report |                 |               |                 |               |                 |               |
+| Scenarios launched       | 300             | 300           | 600             | 600           | 1200            | 1200          |
+| Scenarios completed      | 300             | 300           | 600             | 600           | 1200            | 1200          |
+| Requests completed       | 15300           | 15300         | 30600           | 30600         | 61200           | 61200         |
+| Mean response/sec        | 75.35           | 258.36        | 139.84          | 347.65        | 168.88          | 301.27        |
+| Response time (msec)     |                 |               |                 |               |                 |               |
+| min                      | 14              | 3.4           | 13.4            | 4.1           | 14.9            | 3.8           |
+| max                      | 10418.6         | 10850.3       | 10425.6         | 10756.5       | 12208           | 10407.4       |
+| median                   | 75              | 111.9         | 69.9            | 123.6         | 432.3           | 137.5         |
+| p95                      | 9121.6          | 238.1         | 9064.4          | 261.7         | 9410.8          | 306.9         |
+| p99                      | 10036.8         | 168           | 10041           | 945.6         | 10306.2         | 926.8         |
+| Scenario counts          |                 |               |                 |               |                 |               |
+| 100%                     | 300             | 300           | 600             | 600           | 1200            | 1200          |
+| Codes                    |                 |               |                 |               |                 |               |
+| 200                      | 14576           | 575           | 29247           | 437           | 58424           | 758           |
+| 403                      |                 | 226           |                 | 21809         |                 | 49208         |
+| 429                      |                 | 14499         |                 | 8354          |                 | 11228         |
+| 500                      |                 |               |                 |               |                 | 6             |
+| 502                      | 724             |               | 1353            |               | 2776            |               |
+
+    You can observe here that, With throttling & WAF, we were able to block a significant amount of spam traffic, maintain the `min` response times under increased load and also serve a _p95_ in about `300ms`
 
     _Additional Learnings:_ You can check the logs in cloudwatch for more information or increase the logging level of the lambda functions by changing the environment variable from `INFO` to `DEBUG`
 
-1)  ## 🧹 CleanUp
+1.  ## 🧹 CleanUp
 
     If you want to destroy all the resources created by the stack, Execute the below command to delete the stack, or _you can delete the stack from console as well_
 
